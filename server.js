@@ -3,7 +3,7 @@ const fs      = require('fs');
 const express = require('express');
 const app     = express();
 
-app.use('/js', express.static('js'));
+app.use('/static', express.static('static'));
 
 app.get('/', function (req, res) {
     fs.readFile('index.html', function (err, buf) {
