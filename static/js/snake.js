@@ -1,6 +1,6 @@
 'use strict';
 
-function Snake(stage) {
+function Snake(stage, options) {
     this.ctx         = stage.getContext('2d');
     this.height     = stage.height;
     this.width      = stage.width;
@@ -13,6 +13,8 @@ function Snake(stage) {
     this.snake      = [this.getRandomPos()];
     this.goal       = this.getRandomPos();
     this.interval;
+    this.options    = options;
+    this.speed      = 500;
 
     let grid = this.grid;
     for (var x=0; x<this.gridUnit; x++) {
@@ -27,6 +29,15 @@ function Snake(stage) {
         }
     }
     this.grid = grid;
+    var that = this;
+    window.addEventListener('keydown', function (e) {that.getKeyPress(e) }, false);
+};
+
+Snake.prototype.getSnakeHead = function () {
+    return {
+        'x': this.snake[0].x,
+        'y': this.snake[0].y
+    };
 };
 
 Snake.prototype.getRandomPos = function () {
@@ -34,6 +45,15 @@ Snake.prototype.getRandomPos = function () {
         'x': Math.floor((Math.random() * this.gridUnit)), 
         'y': Math.floor((Math.random() * this.gridUnit))
     }
+};
+
+Snake.prototype.setInterval = function () {
+    let that = this;
+    return window.setInterval(function () {that.move()}, this.speed);
+};
+
+Snake.prototype.growSnake = function () {
+
 };
 
 Snake.prototype.drawSnake = function () {
@@ -45,27 +65,6 @@ Snake.prototype.drawSnake = function () {
     snake.forEach(function (root) {
         ctx.fillRect(root.x * gridHeight, root.y * gridWidth, gridWidth, gridHeight);
     });
-};
-
-Snake.prototype.setInterval = function () {
-    let that = this;
-    return window.setInterval(function () {that.move()}, 500);
-};
-
-Snake.prototype.start = function () {
-    this.interval = this.setInterval();
-};
-
-Snake.prototype.growSnake = function () {
-    let snake = JSON.parse(JSON.stringify(this.snake));
-    let direction = this.direction;
-    let first = snake.shift(0);
-    let last = snake.slice(-1).pop();
-    switch (direction) {
-        case "up":
-
-        break
-    }
 };
 
 Snake.prototype.drawGoal = function () {
@@ -93,58 +92,40 @@ Snake.prototype.drawGrid = function () {
     });
 };
 
-Snake.prototype.move = function () {
-    var snake = JSON.parse(JSON.stringify(this.snake));
-    var direction = this.direction;
-    var first = JSON.parse(JSON.stringify(snake[0]));
 
-    if (direction === "up") {
-        first.y--
-    }
-    if (direction === "down") {
-        first.y++
-    }
-    if (direction === "left") {
-        first.x--;
-    }
-    if (direction === "right") {
-        first.x++;
-    }
-    if (this.outOfArea(first.x, first.y)) {
-        return;
-    }
-    if (this.selfDestruction(first.x, first.y)) {
-        return;
-    }
-    if (this.gotGoal(first.x, first.y)) {
-        this.goal = this.getRandomPos();
-        snake.unshift(
-            JSON.parse(JSON.stringify(snake[0]))
-        ); // grow snake
-        this.drawGoal()
-    }
-    snake.unshift(first);
-    snake.pop();
-    this.snake = snake;
-    this.paint();
-};
-
-Snake.prototype.outOfArea = function (x, y) {
-    if (x < 0 || y < 0) return true; // out of area
-    if (x >= this.gridUnit || y >= this.gridUnit) return true; // out of area
-    return false;
-};
-Snake.prototype.selfDestruction = function (x, y) {
-    let snake = this.snake;
+Snake.prototype.outOfArea = function () {
+    let snakehead = this.getSnakeHead();
     let collision = false;
+    if (snakehead.x < 0 || snakehead.y < 0) {
+        collision = true; // out of area
+    }
+    if (snakehead.x >= this.gridUnit || snakehead.y >= this.gridUnit) {
+        collision = true; // out of area
+    }
+    if (collision) {
+        if (this.options.onOutOfArea) this.options.onOutOfArea();
+    }
+    return collision;
+};
+
+
+Snake.prototype.selfDestruction = function () {
+    let snakehead = this.getSnakeHead();
+    let snake     = this.snake.slice(1);
+    let collision = false;
+    if (snake.length === 0) return;
     // self destruction
     snake.forEach(function(e) {
-        if (e.x === x && e.y === y) {
+        if (e.x === snakehead.x && e.y === snakehead.y) {
             collision = true;
         }
     });
+    if (collision) {
+        if (this.options.onPaint) this.options.onSelfDestruction();
+    }
     return collision;
 };
+
 Snake.prototype.gotGoal = function (x, y) {
     if (x === this.goal.x && y === this.goal.y) return true; // goal
     return false;
@@ -169,16 +150,70 @@ Snake.prototype.getKeyPress = function (e) {
     }
 };
 
+
+Snake.prototype.move = function () {
+    var snake = this.snake;
+    var direction = this.direction;
+    var snakehead = this.getSnakeHead();
+    if (direction === "up") {
+        snakehead.y--
+    }
+    if (direction === "down") {
+        snakehead.y++
+    }
+    if (direction === "left") {
+        snakehead.x--;
+    }
+    if (direction === "right") {
+        snakehead.x++;
+    }
+    if (this.outOfArea()) {
+        clearInterval(this.interval);
+        return;
+    }
+    if (this.selfDestruction()) {
+        clearInterval(this.interval);
+        return;
+    }
+    if (this.gotGoal(snakehead.x, snakehead.y)) {
+        this.goal = this.getRandomPos();
+        snake.unshift(
+            JSON.parse(JSON.stringify(snake[0]))
+        ); // grow snake
+        clearInterval(this.interval);
+        this.speed = this.speed-10;
+        this.interval = this.setInterval();
+        this.drawGoal()
+    }
+    snake.unshift(snakehead);
+    snake.pop();
+    this.paint();
+    if (this.options.onMove) this.options.onMove();
+};
+
 Snake.prototype.paint = function () {
     var ctx = this.ctx;
     ctx.clearRect(0, 0, this.width, this.height);
     this.drawGrid();
     this.drawSnake();
     this.drawGoal();
+    if (this.options.onPaint) this.options.onPaint();
 };
+
+Snake.prototype.start = function () {
+    this.interval = this.setInterval();
+    if (this.options.onStart) this.options.onStart();
+};
+
 let canvas = document.getElementById('snake');
-let s = new Snake(canvas);
+let s = new Snake(canvas, {
+    onCollision: function () { console.log("collision!!!"); },
+    onOutOfArea: function () {console.log("out of area!!!!"); },
+    onSelfDestruction: function () { console.log("self destruction!!!!"); },
+    onStart: function () { console.log("hello World"); },
+    onPaint: function () { console.log("painting...."); },
+    onMove: function () { console.log("moving...."); }
+});
 s.direction = "up";
 s.start();
 
-window.addEventListener('keydown', function (e) {s.getKeyPress(e)}, false);
